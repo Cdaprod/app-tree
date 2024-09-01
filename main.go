@@ -147,10 +147,10 @@ func processFile(file, indent string) {
 		return
 	}
 
-	fileType, _ := filetype.Match(content)
+	kind, _ := filetype.Match(content)
 	fileTypeStr := "unknown"
-	if fileType != nil {
-		fileTypeStr = fileType.MIME.Value
+	if kind != filetype.Unknown {
+		fileTypeStr = kind.MIME.Value
 	}
 
 	output := fmt.Sprintf("\nFILE: %s\nTYPE: %s\nSIZE: %d bytes\nCONTENT:\n%s==========================\n", file, fileTypeStr, len(content), indent)
