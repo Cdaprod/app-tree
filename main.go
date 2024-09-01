@@ -134,6 +134,10 @@ func countItems(dir string) int {
 }
 
 func traverseDirectory(dir, indent string, bar *progressbar.ProgressBar) {
+	if debug {
+		log.Printf("Traversing directory: %s\n", dir)
+	}
+
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		log.Printf("Error reading directory %s: %v\n", dir, err)
@@ -143,17 +147,24 @@ func traverseDirectory(dir, indent string, bar *progressbar.ProgressBar) {
 	writeOutput(fmt.Sprintf("\nDIRECTORY: %s\n%s==========================\n", dir, indent))
 
 	for _, entry := range entries {
-		bar.Add(1)
 		path := filepath.Join(dir, entry.Name())
 		if entry.IsDir() {
 			traverseDirectory(path, indent+"  ", bar)
 		} else {
 			processFile(path, indent+"  ")
 		}
+		bar.Add(1)
+		if debug {
+			log.Printf("Processed: %s\n", path)
+		}
 	}
 }
 
 func processFile(file, indent string) {
+	if debug {
+		log.Printf("Processing file: %s\n", file)
+	}
+
 	content, err := ioutil.ReadFile(file)
 	if err != nil {
 		log.Printf("Error reading file %s: %v\n", file, err)
@@ -181,7 +192,7 @@ func processFile(file, indent string) {
 	writeOutput(output)
 
 	if debug {
-		log.Printf("Processed file: %s\n", file)
+		log.Printf("Finished processing file: %s\n", file)
 	}
 }
 
