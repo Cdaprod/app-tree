@@ -1,4 +1,4 @@
-module github.com/yourusername/app-tree
+module github.com/Cdaprod/app-tree
 
 go 1.20
 
