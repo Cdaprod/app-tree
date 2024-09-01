@@ -175,36 +175,6 @@ func processFile(file, indent string) {
 	}
 }
 
-// ... (rest of the code remains the same)
-
-func processFile(file, indent string) {
-	content, err := ioutil.ReadFile(file)
-	if err != nil {
-		fmt.Printf("Error reading file %s: %v\n", file, err)
-		return
-	}
-
-	kind, _ := filetype.Match(content)
-	fileTypeStr := "unknown"
-	if kind != filetype.Unknown {
-		fileTypeStr = kind.MIME.Value
-	}
-
-	output := fmt.Sprintf("\nFILE: %s\nTYPE: %s\nSIZE: %d bytes\nCONTENT:\n%s==========================\n", file, fileTypeStr, len(content), indent)
-
-	if strings.HasPrefix(fileTypeStr, "text") {
-		lines := strings.Split(string(content), "\n")
-		for _, line := range lines {
-			output += indent + template.HTMLEscapeString(line) + "\n"
-		}
-	} else {
-		output += indent + "[Binary file content not displayed]\n"
-	}
-
-	output += indent + "==========================\n"
-	writeOutput(output)
-}
-
 func writeOutput(content string) {
 	outputMu.Lock()
 	defer outputMu.Unlock()
