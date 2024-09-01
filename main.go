@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -20,6 +21,7 @@ import (
 var (
 	outputMu sync.Mutex
 	output   strings.Builder
+	debug    bool
 )
 
 const (
@@ -46,6 +48,7 @@ func main() {
 	}
 
 	analyzeCmd.Flags().BoolVarP(&generateHTML, "html", "", false, "Generate a static HTML file instead of serving via local server")
+	analyzeCmd.Flags().BoolVarP(&debug, "debug", "d", false, "Enable debug mode")
 
 	rootCmd.AddCommand(analyzeCmd)
 
@@ -65,16 +68,24 @@ func runAnalysis(cmd *cobra.Command, args []string) {
 
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
-		fmt.Printf("Error getting absolute path: %v\n", err)
+		log.Printf("Error getting absolute path: %v\n", err)
 		return
+	}
+
+	if debug {
+		log.Printf("Analyzing directory: %s\n", absDir)
 	}
 
 	tempDir, err := ioutil.TempDir("", "app-tree")
 	if err != nil {
-		fmt.Printf("Error creating temporary directory: %v\n", err)
+		log.Printf("Error creating temporary directory: %v\n", err)
 		return
 	}
 	defer os.RemoveAll(tempDir)
+
+	if debug {
+		log.Printf("Temporary directory created: %s\n", tempDir)
+	}
 
 	fmt.Println("Counting items...")
 	totalItems := countItems(absDir)
@@ -84,11 +95,15 @@ func runAnalysis(cmd *cobra.Command, args []string) {
 	bar := progressbar.Default(int64(totalItems))
 	traverseDirectory(absDir, "", bar)
 
+	if debug {
+		log.Printf("Finished traversing directory\n")
+	}
+
 	if generateHTML {
 		htmlContent := generateHTMLContent(output.String())
 		err = ioutil.WriteFile(htmlFileName, []byte(htmlContent), 0644)
 		if err != nil {
-			fmt.Printf("Error writing to HTML file: %v\n", err)
+			log.Printf("Error writing to HTML file: %v\n", err)
 			return
 		}
 		fmt.Printf("\nAnalysis complete! Open %s in your web browser to view the results.\n", htmlFileName)
@@ -96,60 +111,22 @@ func runAnalysis(cmd *cobra.Command, args []string) {
 		outputPath := filepath.Join(tempDir, outputFileName)
 		err = ioutil.WriteFile(outputPath, []byte(output.String()), 0644)
 		if err != nil {
-			fmt.Printf("Error writing to file: %v\n", err)
+			log.Printf("Error writing to file: %v\n", err)
 			return
+		}
+
+		if debug {
+			log.Printf("Output written to: %s\n", outputPath)
 		}
 
 		serveResult(outputPath)
 	}
 }
 
-func serveResult(outputPath string) {
-	listener, err := net.Listen("tcp", ":0")
-	if err != nil {
-		fmt.Printf("Error starting server: %v\n", err)
-		return
-	}
-	port := listener.Addr().(*net.TCPAddr).Port
-	url := fmt.Sprintf("http://localhost:%d/%s", port, outputFileName)
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
-		http.HandleFunc("/"+outputFileName, func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, outputPath)
-			go func() {
-				time.Sleep(1 * time.Second)
-				os.Exit(0)
-			}()
-		})
-		fmt.Printf("\nServer started. Access the file at:\n\n\033[34;4m%s\033[0m\n\n", url)
-		fmt.Println("The server will shut down after the file is accessed.")
-		http.Serve(listener, nil)
-	}()
-
-	wg.Wait()
-}
-
-func countItems(dir string) int {
-	count := 0
-	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			fmt.Printf("Error accessing path %s: %v\n", path, err)
-			return nil
-		}
-		count++
-		return nil
-	})
-	return count
-}
-
 func traverseDirectory(dir, indent string, bar *progressbar.ProgressBar) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		fmt.Printf("Error reading directory %s: %v\n", dir, err)
+		log.Printf("Error reading directory %s: %v\n", dir, err)
 		return
 	}
 
@@ -165,6 +142,40 @@ func traverseDirectory(dir, indent string, bar *progressbar.ProgressBar) {
 		}
 	}
 }
+
+func processFile(file, indent string) {
+	content, err := ioutil.ReadFile(file)
+	if err != nil {
+		log.Printf("Error reading file %s: %v\n", file, err)
+		return
+	}
+
+	kind, _ := filetype.Match(content)
+	fileTypeStr := "unknown"
+	if kind != filetype.Unknown {
+		fileTypeStr = kind.MIME.Value
+	}
+
+	output := fmt.Sprintf("\nFILE: %s\nTYPE: %s\nSIZE: %d bytes\nCONTENT:\n%s==========================\n", file, fileTypeStr, len(content), indent)
+
+	if strings.HasPrefix(fileTypeStr, "text") {
+		lines := strings.Split(string(content), "\n")
+		for _, line := range lines {
+			output += indent + template.HTMLEscapeString(line) + "\n"
+		}
+	} else {
+		output += indent + "[Binary file content not displayed]\n"
+	}
+
+	output += indent + "==========================\n"
+	writeOutput(output)
+
+	if debug {
+		log.Printf("Processed file: %s\n", file)
+	}
+}
+
+// ... (rest of the code remains the same)
 
 func processFile(file, indent string) {
 	content, err := ioutil.ReadFile(file)
