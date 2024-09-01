@@ -5,13 +5,10 @@ import (
 	"html/template"
 	"io/ioutil"
 	"log"
-	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/h2non/filetype"
 	"github.com/schollz/progressbar/v3"
@@ -43,11 +40,11 @@ func main() {
 	var analyzeCmd = &cobra.Command{
 		Use:   "analyze [directory]",
 		Short: "Analyze the structure of a directory",
-		Long:  `Analyze the structure of a directory and serve the result via a local web server or generate a static HTML file.`,
+		Long:  `Analyze the structure of a directory and generate a static HTML file or text output.`,
 		Run:   runAnalysis,
 	}
 
-	analyzeCmd.Flags().BoolVarP(&generateHTML, "html", "", false, "Generate a static HTML file instead of serving via local server")
+	analyzeCmd.Flags().BoolVarP(&generateHTML, "html", "", false, "Generate a static HTML file instead of text output")
 	analyzeCmd.Flags().BoolVarP(&debug, "debug", "d", false, "Enable debug mode")
 
 	rootCmd.AddCommand(analyzeCmd)
@@ -119,8 +116,21 @@ func runAnalysis(cmd *cobra.Command, args []string) {
 			log.Printf("Output written to: %s\n", outputPath)
 		}
 
-		serveResult(outputPath)
+		fmt.Printf("\nAnalysis complete! Output written to: %s\n", outputPath)
 	}
+}
+
+func countItems(dir string) int {
+	count := 0
+	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			log.Printf("Error accessing path %s: %v\n", path, err)
+			return nil
+		}
+		count++
+		return nil
+	})
+	return count
 }
 
 func traverseDirectory(dir, indent string, bar *progressbar.ProgressBar) {
