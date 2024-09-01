@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"html/template"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -21,7 +22,10 @@ var (
 	output   strings.Builder
 )
 
-const outputFileName = "app_tree_prompt.txt"
+const (
+	outputFileName = "app_tree_prompt.txt"
+	htmlFileName   = "app_tree.html"
+)
 
 func main() {
 	var rootCmd = &cobra.Command{
@@ -30,12 +34,18 @@ func main() {
 		Long:  `A CLI tool to analyze and display the structure of directories in a tree-like format.`,
 	}
 
+	var (
+		generateHTML bool
+	)
+
 	var analyzeCmd = &cobra.Command{
 		Use:   "analyze [directory]",
 		Short: "Analyze the structure of a directory",
-		Long:  `Analyze the structure of a directory and serve the result via a local web server.`,
+		Long:  `Analyze the structure of a directory and serve the result via a local web server or generate a static HTML file.`,
 		Run:   runAnalysis,
 	}
+
+	analyzeCmd.Flags().BoolVarP(&generateHTML, "html", "", false, "Generate a static HTML file instead of serving via local server")
 
 	rootCmd.AddCommand(analyzeCmd)
 
@@ -46,6 +56,8 @@ func main() {
 }
 
 func runAnalysis(cmd *cobra.Command, args []string) {
+	generateHTML, _ := cmd.Flags().GetBool("html")
+
 	dir := "."
 	if len(args) > 0 {
 		dir = args[0]
@@ -72,13 +84,27 @@ func runAnalysis(cmd *cobra.Command, args []string) {
 	bar := progressbar.Default(int64(totalItems))
 	traverseDirectory(absDir, "", bar)
 
-	outputPath := filepath.Join(tempDir, outputFileName)
-	err = ioutil.WriteFile(outputPath, []byte(output.String()), 0644)
-	if err != nil {
-		fmt.Printf("Error writing to file: %v\n", err)
-		return
-	}
+	if generateHTML {
+		htmlContent := generateHTMLContent(output.String())
+		err = ioutil.WriteFile(htmlFileName, []byte(htmlContent), 0644)
+		if err != nil {
+			fmt.Printf("Error writing to HTML file: %v\n", err)
+			return
+		}
+		fmt.Printf("\nAnalysis complete! Open %s in your web browser to view the results.\n", htmlFileName)
+	} else {
+		outputPath := filepath.Join(tempDir, outputFileName)
+		err = ioutil.WriteFile(outputPath, []byte(output.String()), 0644)
+		if err != nil {
+			fmt.Printf("Error writing to file: %v\n", err)
+			return
+		}
 
+		serveResult(outputPath)
+	}
+}
+
+func serveResult(outputPath string) {
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
 		fmt.Printf("Error starting server: %v\n", err)
@@ -158,7 +184,7 @@ func processFile(file, indent string) {
 	if strings.HasPrefix(fileTypeStr, "text") {
 		lines := strings.Split(string(content), "\n")
 		for _, line := range lines {
-			output += indent + line + "\n"
+			output += indent + template.HTMLEscapeString(line) + "\n"
 		}
 	} else {
 		output += indent + "[Binary file content not displayed]\n"
@@ -172,4 +198,28 @@ func writeOutput(content string) {
 	outputMu.Lock()
 	defer outputMu.Unlock()
 	output.WriteString(content)
+}
+
+func generateHTMLContent(content string) string {
+	return fmt.Sprintf(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>App Tree Analysis</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; padding: 20px; }
+        h1 { color: #333; }
+        h2 { color: #0066cc; }
+        h3 { color: #009900; }
+        pre { background-color: #f4f4f4; padding: 10px; border-radius: 5px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>App Tree Analysis</h1>
+    <pre>%s</pre>
+</body>
+</html>
+`, template.HTMLEscapeString(content))
 }
