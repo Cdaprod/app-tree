@@ -19,6 +19,7 @@ var (
 	outputMu sync.Mutex
 	output   strings.Builder
 	debug    bool
+	generateHTML bool
 )
 
 const (
@@ -28,26 +29,14 @@ const (
 
 func main() {
 	var rootCmd = &cobra.Command{
-		Use:   "app-tree",
+		Use:   "app-tree [directory]",
 		Short: "Analyze and visualize directory structures",
-		Long:  `A CLI tool to analyze and display the structure of directories in a tree-like format.`,
-	}
-
-	var (
-		generateHTML bool
-	)
-
-	var analyzeCmd = &cobra.Command{
-		Use:   "analyze [directory]",
-		Short: "Analyze the structure of a directory",
-		Long:  `Analyze the structure of a directory and generate a static HTML file or text output.`,
+		Long:  `app-tree is a CLI tool that analyzes and displays the structure of directories in a tree-like format. It can generate either a text output or an HTML file for easy viewing.`,
 		Run:   runAnalysis,
 	}
 
-	analyzeCmd.Flags().BoolVarP(&generateHTML, "html", "", false, "Generate a static HTML file instead of text output")
-	analyzeCmd.Flags().BoolVarP(&debug, "debug", "d", false, "Enable debug mode")
-
-	rootCmd.AddCommand(analyzeCmd)
+	rootCmd.Flags().BoolVarP(&generateHTML, "html", "", false, "Generate a static HTML file instead of text output")
+	rootCmd.Flags().BoolVarP(&debug, "debug", "d", false, "Enable debug mode")
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
@@ -56,8 +45,6 @@ func main() {
 }
 
 func runAnalysis(cmd *cobra.Command, args []string) {
-	generateHTML, _ := cmd.Flags().GetBool("html")
-
 	dir := "."
 	if len(args) > 0 {
 		dir = args[0]
@@ -105,18 +92,17 @@ func runAnalysis(cmd *cobra.Command, args []string) {
 		}
 		fmt.Printf("\nAnalysis complete! Open %s in your web browser to view the results.\n", htmlFileName)
 	} else {
-		outputPath := filepath.Join(tempDir, outputFileName)
-		err = ioutil.WriteFile(outputPath, []byte(output.String()), 0644)
+		err = ioutil.WriteFile(outputFileName, []byte(output.String()), 0644)
 		if err != nil {
 			log.Printf("Error writing to file: %v\n", err)
 			return
 		}
 
 		if debug {
-			log.Printf("Output written to: %s\n", outputPath)
+			log.Printf("Output written to: %s\n", outputFileName)
 		}
 
-		fmt.Printf("\nAnalysis complete! Output written to: %s\n", outputPath)
+		fmt.Printf("\nAnalysis complete! Output written to: %s\n", outputFileName)
 	}
 }
 
